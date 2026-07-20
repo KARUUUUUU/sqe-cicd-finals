@@ -1,0 +1,13 @@
+.app-container {
+  width: min(800px, 90%);
+  margin: 60px auto;
+  font-family: Arial, sans-serif;
+  line-height: 1.6;
+}
+
+section {
+  margin-top: 30px;
+  padding: 20px;
+  border: 1px solid #cccccc;
+  border-radius: 8px;
+}
