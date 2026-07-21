@@ -16,7 +16,7 @@ pipeline {
         string(
             name: 'DELIVERY_BUILD',
             defaultValue: '2',
-            description: 'Build number from the sqe-delivery job'
+            description: 'Build number from the sqe-cd job'
         )
 
         string(
@@ -51,7 +51,7 @@ pipeline {
         stage('Copy Delivery Package') {
             steps {
                 copyArtifacts(
-                    projectName: 'sqe-delivery',
+                    projectName: 'sqe-cd',
                     selector: specific("${params.DELIVERY_BUILD}"),
                     filter: "${params.PACKAGE_NAME}",
                     flatten: true
