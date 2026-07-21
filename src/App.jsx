@@ -1,6 +1,7 @@
 import './App.css'
 
 function App() {
+  const appVersion = import.meta.env.VITE_APP_VERSION ?? 'Local Development'
   const config = window.APP_CONFIG ?? {
     environment: 'Unknown',
     apiUrl: 'Not configured',
@@ -18,6 +19,9 @@ function App() {
       <section>
         <h2>Application Status</h2>
         <p>System is operational and monitored by jenkins.</p>
+        <p>
+          <strong>Application Version:</strong> {appVersion}
+        </p>
       </section>
 
       <section>

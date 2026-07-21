@@ -1,0 +1,100 @@
+pipeline {
+    agent any
+
+    environment {
+        PATH = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:${env.PATH}"
+    }
+
+    parameters {
+        choice(
+            name: 'RELEASE_TYPE',
+            choices: ['devSnapshot', 'specificVersion'],
+            description: 'Choose the release type'
+        )
+
+        string(
+            name: 'VERSION',
+            defaultValue: 'v1.0.0',
+            description: 'Used only when specificVersion is selected'
+        )
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Install Dependencies') {
+            steps {
+                sh 'npm ci'
+            }
+        }
+
+        stage('Determine Version') {
+            steps {
+                script {
+                    if (params.RELEASE_TYPE == 'devSnapshot') {
+                        env.APP_VERSION = "devSnapshot-build${env.BUILD_NUMBER}"
+                    } else {
+                        if (!params.VERSION?.trim()) {
+                            error('VERSION cannot be empty for a specific release.')
+                        }
+
+                        env.APP_VERSION = params.VERSION.trim()
+                    }
+
+                    echo "Selected version: ${env.APP_VERSION}"
+                }
+            }
+        }
+
+        stage('Inject Version') {
+            steps {
+                sh '''
+                    echo "VITE_APP_VERSION=${APP_VERSION}" > .env.production
+                '''
+            }
+        }
+
+        stage('Build Application') {
+            steps {
+                sh 'npm run build'
+            }
+        }
+
+        stage('Create Package') {
+            steps {
+                sh '''
+                    rm -f app-${APP_VERSION}.zip
+                    cd dist
+                    zip -r ../app-${APP_VERSION}.zip .
+                '''
+            }
+        }
+
+        stage('Archive Package') {
+            steps {
+                archiveArtifacts(
+                    artifacts: 'app-*.zip',
+                    fingerprint: true
+                )
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "Delivery package created: app-${env.APP_VERSION}.zip"
+        }
+
+        failure {
+            echo 'Delivery job failed. Review the console output.'
+        }
+
+        always {
+            sh 'rm -rf dist .env.production'
+        }
+    }
+}
