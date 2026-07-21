@@ -1,0 +1,129 @@
+pipeline {
+    agent any
+
+    environment {
+        PATH = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:${env.PATH}"
+        DEPLOY_ROOT = "${JENKINS_HOME}/deployments"
+    }
+
+    parameters {
+        choice(
+            name: 'TARGET_ENV',
+            choices: ['staging', 'uat', 'production'],
+            description: 'Choose the environment where the application will be deployed'
+        )
+
+        string(
+            name: 'DELIVERY_BUILD',
+            defaultValue: '2',
+            description: 'Build number from the sqe-delivery job'
+        )
+
+        string(
+            name: 'PACKAGE_NAME',
+            defaultValue: 'app-devSnapshot-build2.zip',
+            description: 'Exact ZIP filename shown under Build Artifacts'
+        )
+    }
+
+    stages {
+        stage('Validate Parameters') {
+            steps {
+                script {
+                    if (!params.DELIVERY_BUILD?.trim()) {
+                        error('DELIVERY_BUILD cannot be empty.')
+                    }
+
+                    if (!params.PACKAGE_NAME?.trim()) {
+                        error('PACKAGE_NAME cannot be empty.')
+                    }
+
+                    if (!params.PACKAGE_NAME.endsWith('.zip')) {
+                        error('PACKAGE_NAME must be a ZIP file.')
+                    }
+
+                    env.DEPLOY_DIRECTORY =
+                        "${env.DEPLOY_ROOT}/${params.TARGET_ENV}"
+                }
+            }
+        }
+
+        stage('Copy Delivery Package') {
+            steps {
+                copyArtifacts(
+                    projectName: 'sqe-delivery',
+                    selector: specific("${params.DELIVERY_BUILD}"),
+                    filter: "${params.PACKAGE_NAME}",
+                    flatten: true
+                )
+            }
+        }
+
+        stage('Unpack Package') {
+            steps {
+                sh '''
+                    rm -rf deployment-temp
+                    mkdir -p deployment-temp
+                    unzip -q "${PACKAGE_NAME}" -d deployment-temp
+                '''
+            }
+        }
+
+        stage('Inject Environment Configuration') {
+            steps {
+                sh '''
+                    CONFIG_FILE="configs/config.${TARGET_ENV}.js"
+
+                    if [ ! -f "$CONFIG_FILE" ]; then
+                        echo "Configuration file not found: $CONFIG_FILE"
+                        exit 1
+                    fi
+
+                    cp "$CONFIG_FILE" deployment-temp/config.js
+
+                    echo "Injected configuration:"
+                    cat deployment-temp/config.js
+                '''
+            }
+        }
+
+        stage('Deploy to Target Environment') {
+            steps {
+                sh '''
+                    mkdir -p "${DEPLOY_DIRECTORY}"
+                    rm -rf "${DEPLOY_DIRECTORY:?}"/*
+                    cp -R deployment-temp/. "${DEPLOY_DIRECTORY}/"
+
+                    echo "Application deployed to:"
+                    echo "${DEPLOY_DIRECTORY}"
+                '''
+            }
+        }
+
+        stage('Verify Deployment') {
+            steps {
+                sh '''
+                    test -f "${DEPLOY_DIRECTORY}/index.html"
+                    test -f "${DEPLOY_DIRECTORY}/config.js"
+
+                    echo "Deployment files:"
+                    ls -la "${DEPLOY_DIRECTORY}"
+                '''
+            }
+        }
+    }
+
+    post {
+        always {
+            sh 'rm -rf deployment-temp *.zip'
+        }
+
+        success {
+            echo "Deployment to ${params.TARGET_ENV} completed successfully."
+        }
+
+        failure {
+            echo 'Deployment failed. Review the console output.'
+        }
+    }
+}
