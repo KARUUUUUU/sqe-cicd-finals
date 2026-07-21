@@ -17,7 +17,7 @@ function App() {
 
       <section>
         <h2>Application Status</h2>
-        <p>System is operational.</p>
+        <p>System is operational and monitored by jenkins.</p>
       </section>
 
       <section>
